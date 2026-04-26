@@ -4,7 +4,6 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabExecutor;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,6 +11,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.cloudburstmc.protocol.bedrock.data.GameRuleData;
+import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
+import org.cloudburstmc.protocol.bedrock.packet.GameRulesChangedPacket;
+import org.geysermc.geyser.api.GeyserApi;
+import org.geysermc.geyser.api.connection.GeyserConnection;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,11 +30,11 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     private File playerDataDir;
     private final ConcurrentHashMap<UUID, Boolean> playerHidden = new ConcurrentHashMap<>();
     private String prefix;
+    private boolean geyserHooked = false;
 
     @Override
     public void onEnable() {
         instance = this;
-
         saveDefaultConfig();
         loadConfig();
 
@@ -39,13 +43,18 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             playerDataDir.mkdirs();
         }
 
-        getServer().getPluginManager().registerEvents(this, this);
+        if (getServer().getPluginManager().isPluginEnabled("Geyser-Spigot")) {
+            geyserHooked = true;
+            getLogger().info("Geyser-Spigot detecte! Masquage des coordonnees Bedrock active.");
+        } else {
+            getLogger().warning("Geyser-Spigot introuvable. Le masquage Bedrock ne fonctionnera pas.");
+        }
 
+        getServer().getPluginManager().registerEvents(this, this);
         registerCommand("coordinates");
-        registerCommand("coords");
         registerCommand("coordstoggle");
 
-        getLogger().info("CoordsToggle enabled successfully!");
+        getLogger().info("CoordsToggle active avec succes!");
     }
 
     private void registerCommand(String name) {
@@ -59,26 +68,44 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     @Override
     public void onDisable() {
         saveAllPlayerData();
-        getLogger().info("CoordsToggle disabled!");
+        getLogger().info("CoordsToggle desactive!");
     }
 
     private void loadConfig() {
         reloadConfig();
-        FileConfiguration config = getConfig();
-        prefix = config.getString("Prefix", "§dSky X §9Network §eCoordsToggle §8●⏺ ");
+        prefix = getConfig().getString("Prefix", "§dSky X §9Network §eCoordsToggle §8●⏺ ");
     }
 
     public void reloadPlugin() {
         loadConfig();
         loadAllPlayerData();
         for (Player player : getServer().getOnlinePlayers()) {
-            if (isCoordinateHidden(player.getUniqueId())) {
-                player.addScoreboardTag("coords_hidden");
-            } else {
-                player.removeScoreboardTag("coords_hidden");
-            }
+            sendGeyserPacketDirect(player.getUniqueId(), isCoordinateHidden(player.getUniqueId()));
         }
-        getLogger().info("Plugin configuration reloaded!");
+        getLogger().info("Configuration rechargee!");
+    }
+
+    private void sendGeyserPacketDirect(UUID uuid, boolean hidden) {
+        if (!geyserHooked) return;
+
+        try {
+            GameRulesChangedPacket packet = new GameRulesChangedPacket();
+            packet.getGameRules().add(new GameRuleData<>("showCoordinates", !hidden));
+
+            GeyserConnection connection = GeyserApi.api().connectionByUuid(uuid);
+            if (connection == null) return;
+
+            var sessionField = connection.getClass().getDeclaredField("session");
+            sessionField.setAccessible(true);
+            Object session = sessionField.get(connection);
+
+            if (session != null) {
+                var method = session.getClass().getMethod("sendUpstreamPacket", BedrockPacket.class);
+                method.invoke(session, packet);
+            }
+        } catch (Exception e) {
+            getLogger().warning("Erreur envoi packet: " + e.getMessage());
+        }
     }
 
     private File getPlayerFile(UUID uuid) {
@@ -88,16 +115,15 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     private void loadAllPlayerData() {
         playerHidden.clear();
         File[] files = playerDataDir.listFiles((dir, name) -> name.endsWith(".yml"));
-        if (files != null) {
-            for (File file : files) {
-                try {
-                    YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-                    UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
-                    boolean hidden = config.getBoolean("hidden", false);
-                    playerHidden.put(uuid, hidden);
-                } catch (Exception e) {
-                    getLogger().warning("Failed to load player data: " + file.getName());
-                }
+        if (files == null) return;
+
+        for (File file : files) {
+            try {
+                YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+                UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
+                playerHidden.put(uuid, config.getBoolean("hidden", false));
+            } catch (Exception e) {
+                getLogger().warning("Echec du chargement des donnees: " + file.getName());
             }
         }
     }
@@ -113,14 +139,12 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         try {
             config.save(file);
         } catch (IOException e) {
-            getLogger().warning("Failed to save player data for " + uuid + ": " + e.getMessage());
+            getLogger().warning("Echec de la sauvegarde pour " + uuid + ": " + e.getMessage());
         }
     }
 
     private void saveAllPlayerData() {
-        for (UUID uuid : playerHidden.keySet()) {
-            savePlayerData(uuid);
-        }
+        playerHidden.keySet().forEach(this::savePlayerData);
     }
 
     private void loadPlayerData(UUID uuid) {
@@ -129,13 +153,11 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             playerHidden.put(uuid, false);
             return;
         }
-
         try {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-            boolean hidden = config.getBoolean("hidden", false);
-            playerHidden.put(uuid, hidden);
+            playerHidden.put(uuid, config.getBoolean("hidden", false));
         } catch (Exception e) {
-            getLogger().warning("Failed to load player data for " + uuid + ": " + e.getMessage());
+            getLogger().warning("Echec du chargement pour " + uuid);
             playerHidden.put(uuid, false);
         }
     }
@@ -148,55 +170,63 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
-
         loadPlayerData(uuid);
 
-        if (isCoordinateHidden(uuid)) {
-            player.addScoreboardTag("coords_hidden");
-        }
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (player.isOnline() && isCoordinateHidden(uuid)) {
+                sendGeyserPacketDirect(uuid, true);
+            }
+        }, 20L);
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
-
         savePlayerData(uuid);
         playerHidden.remove(uuid);
     }
 
     @Override
     public boolean onCommand(org.bukkit.command.CommandSender sender, Command command, String label, String[] args) {
-        String commandName = command.getName().toLowerCase();
+        String cmdName = command.getName().toLowerCase();
 
-        if (commandName.equals("coordstoggle") || commandName.equals("ctreload")) {
+        if (cmdName.equals("coordstoggle") || cmdName.equals("ctreload")) {
             if (!sender.hasPermission("coords.toggle.reload")) {
-                sender.sendMessage(prefix + "§cYou don't have permission to use this command!");
+                sender.sendMessage(prefix + "§cVous n'avez pas la permission!");
                 return true;
             }
             reloadPlugin();
-            sender.sendMessage(prefix + "§aPlugin configuration reloaded!");
+            sender.sendMessage(prefix + "§aConfiguration rechargee!");
             return true;
         }
 
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(prefix + "§cThis command can only be used by players!");
+            sender.sendMessage(prefix + "§cCette commande ne peut etre utilisee que par un joueur!");
+            return true;
+        }
+
+        if (!player.hasPermission("coords.toggle.use")) {
+            player.sendMessage(prefix + "§cVous n'avez pas la permission!");
             return true;
         }
 
         UUID uuid = player.getUniqueId();
-        boolean currentlyHidden = isCoordinateHidden(uuid);
 
-        boolean newState = !currentlyHidden;
-        playerHidden.put(uuid, newState);
+        if (geyserHooked && GeyserApi.api().connectionByUuid(uuid) == null) {
+            player.sendMessage(prefix + "§eVous jouez en §bJava§e. Appuyez sur §bF3§e pour voir vos coordonnees.");
+            return true;
+        }
+
+        boolean newHidden = !isCoordinateHidden(uuid);
+        playerHidden.put(uuid, newHidden);
         savePlayerData(uuid);
+        sendGeyserPacketDirect(uuid, newHidden);
 
-        if (newState) {
-            player.addScoreboardTag("coords_hidden");
-            player.sendMessage(prefix + "§aCoordinates display has been §chidden§a!");
+        if (newHidden) {
+            player.sendMessage(prefix + "§aCoordonnees §ccachees§a! Anti stream-snipe §aactive");
         } else {
-            player.removeScoreboardTag("coords_hidden");
-            player.sendMessage(prefix + "§aCoordinates display has been §eenabled§a!");
+            player.sendMessage(prefix + "§aCoordonnees §eaffichees§a!");
         }
 
         return true;
