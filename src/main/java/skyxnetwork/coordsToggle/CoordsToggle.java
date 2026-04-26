@@ -1,5 +1,10 @@
 package skyxnetwork.coordsToggle;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.packettype.PacketSource;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -43,8 +48,43 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
 
         registerCommand("coordinates");
         registerCommand("coords");
+        registerCommand("coordstoggle");
+
+        try {
+            PacketEvents.getAPI().getEventManager().registerListener(new CoordsPacketListener());
+            getLogger().info("Packet listener registered successfully!");
+        } catch (Exception e) {
+            getLogger().warning("Failed to register packet listener: " + e.getMessage());
+        }
 
         getLogger().info("CoordsToggle enabled successfully!");
+    }
+
+    private class CoordsPacketListener implements PacketListener {
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            if (event.getPacketSource() != PacketSource.SERVER_TO_CLIENT) return;
+            
+            Player player = event.getUser().as(Player.class);
+            if (player == null) return;
+            
+            UUID uuid = player.getUniqueId();
+            if (!isCoordinateHidden(uuid)) return;
+
+            int packetId = event.getPacket().getPacketId();
+            
+            if (packetId == PacketType.Play.Server.PLAYER_POSITION ||
+                packetId == PacketType.Play.Server.PLAYER_POSITION_AND_LOOK ||
+                packetId == PacketType.Play.Server.PLAYER_ROTATION ||
+                packetId == PacketType.Play.Server.PLAYER_UPDATE_POSITION) {
+                
+                try {
+                    event.getPacket().getDoubles().write(0, 0.0);
+                    event.getPacket().getDoubles().write(1, -64.0);
+                    event.getPacket().getDoubles().write(2, 0.0);
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     private void registerCommand(String name) {

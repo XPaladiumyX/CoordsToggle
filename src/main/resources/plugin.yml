@@ -9,6 +9,7 @@ load: POSTWORLD
 
 authors: [ XPaladiumyX ]
 website: skyxnetwork.net
+depend: [ packetevents ]
 
 commands:
   coordinates:
