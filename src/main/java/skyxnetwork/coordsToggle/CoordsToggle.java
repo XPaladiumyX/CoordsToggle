@@ -1,10 +1,5 @@
 package skyxnetwork.coordsToggle;
 
-import com.github.retrooper.packetevents.PacketEvents;
-import com.github.retrooper.packetevents.event.PacketListener;
-import com.github.retrooper.packetevents.event.PacketListenerPriority;
-import com.github.retrooper.packetevents.event.PacketSendEvent;
-import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -50,37 +45,7 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         registerCommand("coords");
         registerCommand("coordstoggle");
 
-        PacketEvents.getAPI().getEventManager().registerListener(new CoordsPacketListener(), PacketListenerPriority.NORMAL);
-
         getLogger().info("CoordsToggle enabled successfully!");
-    }
-
-    private static class CoordsPacketListener implements PacketListener {
-        @Override
-        public void onPacketSend(PacketSendEvent event) {
-            Player player = event.getPlayer();
-            if (player == null) return;
-
-            UUID uuid = player.getUniqueId();
-            if (!CoordsToggle.getInstance().isCoordinateHidden(uuid)) return;
-
-            var packetType = event.getPacketType();
-
-            if (packetType == PacketType.Play.Server.PLAYER_POSITION ||
-                    packetType == PacketType.Play.Server.PLAYER_POSITION_AND_LOOK ||
-                    packetType == PacketType.Play.Server.PLAYER_ROTATION) {
-
-                try {
-                    var wrapper = new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPosition(event);
-                    wrapper.setX(0.0);
-                    wrapper.setY(-64.0);
-                    wrapper.setZ(0.0);
-                    wrapper.setFields(true, true, true);
-                    wrapper.writeData();
-                } catch (Exception ignored) {
-                }
-            }
-        }
     }
 
     private void registerCommand(String name) {
