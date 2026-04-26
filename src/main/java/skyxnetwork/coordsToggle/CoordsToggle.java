@@ -5,6 +5,7 @@ import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.packettype.PacketTypeCommon;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -64,12 +65,12 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             UUID uuid = player.getUniqueId();
             if (!CoordsToggle.getInstance().isCoordinateHidden(uuid)) return;
 
-            int packetId = event.getPacketType();
+            PacketTypeCommon packetType = event.getPacketType();
 
-            if (packetId == PacketType.Play.Server.PLAYER_POSITION ||
-                    packetId == PacketType.Play.Server.PLAYER_POSITION_AND_LOOK ||
-                    packetId == PacketType.Play.Server.PLAYER_ROTATION ||
-                    packetId == PacketType.Play.Server.PLAYER_UPDATE_POSITION) {
+            if (packetType == PacketType.Play.Server.PLAYER_POSITION ||
+                    packetType == PacketType.Play.Server.PLAYER_POSITION_AND_LOOK ||
+                    packetType == PacketType.Play.Server.PLAYER_ROTATION ||
+                    packetType == PacketType.Play.Server.PLAYER_UPDATE_POSITION) {
 
                 try {
                     event.getPacket().getDoubles().write(0, 0.0);
