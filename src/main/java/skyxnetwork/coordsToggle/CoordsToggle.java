@@ -4,7 +4,6 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
-import com.github.retrooper.packetevents.protocol.packettype.PacketSource;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -63,7 +62,7 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     private class CoordsPacketListener implements PacketListener {
         @Override
         public void onPacketSend(PacketSendEvent event) {
-            if (event.getPacketSource() != PacketSource.SERVER_TO_CLIENT) return;
+            if (!event.isServerSide()) return;
             
             Player player = event.getUser().as(Player.class);
             if (player == null) return;
