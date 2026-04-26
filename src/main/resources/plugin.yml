@@ -1,0 +1,31 @@
+name: CoordsToggle
+description: A plugin to toggle Bedrock coordinates display for streamers
+prefix: SkyXCore-Logger
+version: '${version}'
+
+main: skyxnetwork.coordsToggle.CoordsToggle
+api-version: '1.21.4'
+load: POSTWORLD
+
+authors: [ XPaladiumyX ]
+website: skyxnetwork.net
+
+commands:
+  coordinates:
+    description: Toggle Bedrock coordinates display
+    aliases: [coords]
+    usage: /<command>
+    permission: coords.toggle.use
+  coordstoggle:
+    description: Reload plugin configuration
+    aliases: [ctreload]
+    usage: /<command>
+    permission: coords.toggle.reload
+
+permissions:
+  coords.toggle.use:
+    description: Allow toggling coordinates display
+    default: true
+  coords.toggle.reload:
+    description: Allow reloading plugin configuration
+    default: op
