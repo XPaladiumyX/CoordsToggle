@@ -11,7 +11,7 @@ authors: [ XPaladiumyX ]
 website: skyxnetwork.net
 
 softdepend:
-  - Geyser-Spigot
+  - floodgate
 
 commands:
   coordinates:

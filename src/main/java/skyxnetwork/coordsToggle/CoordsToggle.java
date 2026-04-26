@@ -11,12 +11,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.cloudburstmc.protocol.bedrock.data.GameRuleData;
-import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
-import org.cloudburstmc.protocol.bedrock.packet.GameRulesChangedPacket;
-import org.geysermc.geyser.api.GeyserApi;
-import org.geysermc.geyser.api.connection.GeyserConnection;
+import org.bukkit.plugin.messaging.PluginMessageListener;
+import org.geysermc.floodgate.api.FloodgateApi;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
@@ -24,13 +23,16 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class CoordsToggle extends JavaPlugin implements Listener, CommandExecutor, TabExecutor {
+public final class CoordsToggle extends JavaPlugin implements Listener, CommandExecutor, TabExecutor, PluginMessageListener {
+
+    // Canal plugin message entre Paper et le plugin Velocity
+    private static final String CHANNEL = "coordstoggle:coords";
 
     private static CoordsToggle instance;
     private File playerDataDir;
     private final ConcurrentHashMap<UUID, Boolean> playerHidden = new ConcurrentHashMap<>();
     private String prefix;
-    private boolean geyserHooked = false;
+    private boolean floodgateHooked = false;
 
     @Override
     public void onEnable() {
@@ -43,18 +45,24 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             playerDataDir.mkdirs();
         }
 
-        if (getServer().getPluginManager().isPluginEnabled("Geyser-Spigot")) {
-            geyserHooked = true;
-            getLogger().info("Geyser-Spigot detecte! Masquage des coordonnees Bedrock active.");
+        // On utilise Floodgate (présent sur Paper) pour détecter les joueurs Bedrock
+        if (getServer().getPluginManager().isPluginEnabled("floodgate")) {
+            floodgateHooked = true;
+            getLogger().info("Floodgate detecte! Detection joueurs Bedrock active.");
         } else {
-            getLogger().warning("Geyser-Spigot introuvable. Le masquage Bedrock ne fonctionnera pas.");
+            getLogger().warning("Floodgate introuvable. La detection Bedrock ne fonctionnera pas.");
         }
+
+        // Enregistre le canal plugin message vers Velocity (outgoing)
+        getServer().getMessenger().registerOutgoingPluginChannel(this, CHANNEL);
+        // Incoming au cas où Velocity répond (optionnel, pour debug futur)
+        getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL, this);
 
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand("coordinates");
         registerCommand("coordstoggle");
 
-        getLogger().info("CoordsToggle active avec succes!");
+        getLogger().info("CoordsToggle (Paper) active avec succes!");
     }
 
     private void registerCommand(String name) {
@@ -68,6 +76,8 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     @Override
     public void onDisable() {
         saveAllPlayerData();
+        getServer().getMessenger().unregisterOutgoingPluginChannel(this);
+        getServer().getMessenger().unregisterIncomingPluginChannel(this);
         getLogger().info("CoordsToggle desactive!");
     }
 
@@ -80,32 +90,34 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         loadConfig();
         loadAllPlayerData();
         for (Player player : getServer().getOnlinePlayers()) {
-            sendGeyserPacketDirect(player.getUniqueId(), isCoordinateHidden(player.getUniqueId()));
+            sendToggleToProxy(player, isCoordinateHidden(player.getUniqueId()));
         }
         getLogger().info("Configuration rechargee!");
     }
 
-    private void sendGeyserPacketDirect(UUID uuid, boolean hidden) {
-        if (!geyserHooked) return;
+    /**
+     * Envoie un plugin message à Velocity.
+     * Le message contient : UUID (string) + "|" + état (true/false).
+     * Velocity intercepte ce message et envoie le GameRulesChangedPacket au client Bedrock.
+     */
+    private void sendToggleToProxy(Player player, boolean hidden) {
+        if (!floodgateHooked) return;
+        if (!FloodgateApi.getInstance().isFloodgatePlayer(player.getUniqueId())) return;
 
         try {
-            GeyserConnection connection = GeyserApi.api().connectionByUuid(uuid);
-            if (connection == null) return; // Joueur Java Edition → on ignore
-
-            GameRulesChangedPacket packet = new GameRulesChangedPacket();
-            packet.getGameRules().add(new GameRuleData<>("showCoordinates", !hidden));
-
-            // GeyserConnection est implémenté par GeyserSession qui expose sendUpstreamPacket.
-            // On appelle la méthode directement sur l'objet connection — pas besoin de chercher
-            // un champ "session" intermédiaire : connection EST déjà la session.
-            var method = connection.getClass().getMethod("sendUpstreamPacket", BedrockPacket.class);
-            method.invoke(connection, packet);
-
-        } catch (NoSuchMethodException e) {
-            getLogger().severe("sendUpstreamPacket introuvable sur GeyserSession. Mauvaise version de Geyser ? " + e.getMessage());
-        } catch (Exception e) {
-            getLogger().warning("Erreur envoi packet Bedrock: " + e.getMessage());
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(bos);
+            dos.writeUTF(player.getUniqueId().toString());
+            dos.writeBoolean(hidden);
+            player.sendPluginMessage(this, CHANNEL, bos.toByteArray());
+        } catch (IOException e) {
+            getLogger().warning("Erreur envoi plugin message: " + e.getMessage());
         }
+    }
+
+    @Override
+    public void onPluginMessageReceived(String channel, Player player, byte[] message) {
+        // Réservé pour éventuels retours de Velocity (non utilisé actuellement)
     }
 
     private File getPlayerFile(UUID uuid) {
@@ -116,7 +128,6 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         playerHidden.clear();
         File[] files = playerDataDir.listFiles((dir, name) -> name.endsWith(".yml"));
         if (files == null) return;
-
         for (File file : files) {
             try {
                 YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
@@ -131,11 +142,9 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     private void savePlayerData(UUID uuid) {
         Boolean hidden = playerHidden.get(uuid);
         if (hidden == null) return;
-
         File file = getPlayerFile(uuid);
         YamlConfiguration config = new YamlConfiguration();
         config.set("hidden", hidden);
-
         try {
             config.save(file);
         } catch (IOException e) {
@@ -157,7 +166,6 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             playerHidden.put(uuid, config.getBoolean("hidden", false));
         } catch (Exception e) {
-            getLogger().warning("Echec du chargement pour " + uuid);
             playerHidden.put(uuid, false);
         }
     }
@@ -172,17 +180,17 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         UUID uuid = player.getUniqueId();
         loadPlayerData(uuid);
 
+        // Délai 40 ticks (2s) : laisser le temps à Velocity/Geyser d'établir la session
         getServer().getScheduler().runTaskLater(this, () -> {
             if (player.isOnline() && isCoordinateHidden(uuid)) {
-                sendGeyserPacketDirect(uuid, true);
+                sendToggleToProxy(player, true);
             }
-        }, 20L);
+        }, 40L);
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
+        UUID uuid = event.getPlayer().getUniqueId();
         savePlayerData(uuid);
         playerHidden.remove(uuid);
     }
@@ -213,18 +221,19 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
 
         UUID uuid = player.getUniqueId();
 
-        if (geyserHooked && GeyserApi.api().connectionByUuid(uuid) == null) {
-            player.sendMessage(prefix + "§eVous jouez en §bJava§e. Appuyez sur §bF3§e pour voir vos coordonnees.");
+        // Joueur Java Edition → F3, pas besoin du plugin
+        if (floodgateHooked && !FloodgateApi.getInstance().isFloodgatePlayer(uuid)) {
+            player.sendMessage(prefix + "§eVous jouez en §bJava Edition§e. Utilisez §bF3§e pour vos coordonnees.");
             return true;
         }
 
         boolean newHidden = !isCoordinateHidden(uuid);
         playerHidden.put(uuid, newHidden);
         savePlayerData(uuid);
-        sendGeyserPacketDirect(uuid, newHidden);
+        sendToggleToProxy(player, newHidden);
 
         if (newHidden) {
-            player.sendMessage(prefix + "§aCoordonnees §ccachees§a! Anti stream-snipe §aactive");
+            player.sendMessage(prefix + "§aCoordonnees §ccachees§a! Anti stream-snipe §aactive ✔");
         } else {
             player.sendMessage(prefix + "§aCoordonnees §eaffichees§a!");
         }
