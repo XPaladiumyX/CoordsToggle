@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class CoordsToggle extends JavaPlugin implements Listener, CommandExecutor, TabExecutor, PluginMessageListener {
 
-    // Canal plugin message entre Paper et le plugin Velocity
     private static final String CHANNEL = "coordstoggle:coords";
 
     private static CoordsToggle instance;
@@ -45,24 +44,21 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             playerDataDir.mkdirs();
         }
 
-        // On utilise Floodgate (présent sur Paper) pour détecter les joueurs Bedrock
         if (getServer().getPluginManager().isPluginEnabled("floodgate")) {
             floodgateHooked = true;
-            getLogger().info("Floodgate detecte! Detection joueurs Bedrock active.");
+            getLogger().info("Floodgate detected! Bedrock player detection enabled.");
         } else {
-            getLogger().warning("Floodgate introuvable. La detection Bedrock ne fonctionnera pas.");
+            getLogger().warning("Floodgate not found. Bedrock detection will not work.");
         }
 
-        // Enregistre le canal plugin message vers Velocity (outgoing)
         getServer().getMessenger().registerOutgoingPluginChannel(this, CHANNEL);
-        // Incoming au cas où Velocity répond (optionnel, pour debug futur)
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL, this);
 
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand("coordinates");
         registerCommand("coordstoggle");
 
-        getLogger().info("CoordsToggle (Paper) active avec succes!");
+        getLogger().info("CoordsToggle (Paper) enabled successfully!");
     }
 
     private void registerCommand(String name) {
@@ -78,7 +74,7 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         saveAllPlayerData();
         getServer().getMessenger().unregisterOutgoingPluginChannel(this);
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
-        getLogger().info("CoordsToggle desactive!");
+        getLogger().info("CoordsToggle disabled!");
     }
 
     private void loadConfig() {
@@ -92,14 +88,9 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         for (Player player : getServer().getOnlinePlayers()) {
             sendToggleToProxy(player, isCoordinateHidden(player.getUniqueId()));
         }
-        getLogger().info("Configuration rechargee!");
+        getLogger().info("Configuration reloaded!");
     }
 
-    /**
-     * Envoie un plugin message à Velocity.
-     * Le message contient : UUID (string) + "|" + état (true/false).
-     * Velocity intercepte ce message et envoie le GameRulesChangedPacket au client Bedrock.
-     */
     private void sendToggleToProxy(Player player, boolean hidden) {
         if (!floodgateHooked) return;
         if (!FloodgateApi.getInstance().isFloodgatePlayer(player.getUniqueId())) return;
@@ -111,13 +102,12 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
             dos.writeBoolean(hidden);
             player.sendPluginMessage(this, CHANNEL, bos.toByteArray());
         } catch (IOException e) {
-            getLogger().warning("Erreur envoi plugin message: " + e.getMessage());
+            getLogger().warning("Failed to send plugin message: " + e.getMessage());
         }
     }
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        // Réservé pour éventuels retours de Velocity (non utilisé actuellement)
     }
 
     private File getPlayerFile(UUID uuid) {
@@ -134,7 +124,7 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
                 UUID uuid = UUID.fromString(file.getName().replace(".yml", ""));
                 playerHidden.put(uuid, config.getBoolean("hidden", false));
             } catch (Exception e) {
-                getLogger().warning("Echec du chargement des donnees: " + file.getName());
+                getLogger().warning("Failed to load player data: " + file.getName());
             }
         }
     }
@@ -148,7 +138,7 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         try {
             config.save(file);
         } catch (IOException e) {
-            getLogger().warning("Echec de la sauvegarde pour " + uuid + ": " + e.getMessage());
+            getLogger().warning("Failed to save player data for " + uuid + ": " + e.getMessage());
         }
     }
 
@@ -180,7 +170,6 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         UUID uuid = player.getUniqueId();
         loadPlayerData(uuid);
 
-        // Délai 40 ticks (2s) : laisser le temps à Velocity/Geyser d'établir la session
         getServer().getScheduler().runTaskLater(this, () -> {
             if (player.isOnline() && isCoordinateHidden(uuid)) {
                 sendToggleToProxy(player, true);
@@ -201,29 +190,28 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
 
         if (cmdName.equals("coordstoggle") || cmdName.equals("ctreload")) {
             if (!sender.hasPermission("coords.toggle.reload")) {
-                sender.sendMessage(prefix + "§cVous n'avez pas la permission!");
+                sender.sendMessage(prefix + "§cYou don't have permission!");
                 return true;
             }
             reloadPlugin();
-            sender.sendMessage(prefix + "§aConfiguration rechargee!");
+            sender.sendMessage(prefix + "§aConfiguration reloaded!");
             return true;
         }
 
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(prefix + "§cCette commande ne peut etre utilisee que par un joueur!");
+            sender.sendMessage(prefix + "§cThis command can only be used by a player!");
             return true;
         }
 
         if (!player.hasPermission("coords.toggle.use")) {
-            player.sendMessage(prefix + "§cVous n'avez pas la permission!");
+            player.sendMessage(prefix + "§cYou don't have permission!");
             return true;
         }
 
         UUID uuid = player.getUniqueId();
 
-        // Joueur Java Edition → F3, pas besoin du plugin
         if (floodgateHooked && !FloodgateApi.getInstance().isFloodgatePlayer(uuid)) {
-            player.sendMessage(prefix + "§eVous jouez en §bJava Edition§e. Utilisez §bF3§e pour vos coordonnees.");
+            player.sendMessage(prefix + "§eYou are playing on §bJava Edition§e. Press §bF3§e to see your coordinates.");
             return true;
         }
 
@@ -233,9 +221,9 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         sendToggleToProxy(player, newHidden);
 
         if (newHidden) {
-            player.sendMessage(prefix + "§aCoordonnees §ccachees§a! Anti stream-snipe §aactive ✔");
+            player.sendMessage(prefix + "§aCoordinates §chidden§a! Anti stream-snipe §aenabled");
         } else {
-            player.sendMessage(prefix + "§aCoordonnees §eaffichees§a!");
+            player.sendMessage(prefix + "§aCoordinates §edisplayed§a!");
         }
 
         return true;
