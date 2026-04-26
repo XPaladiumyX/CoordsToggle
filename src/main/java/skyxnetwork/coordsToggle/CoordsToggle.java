@@ -5,7 +5,6 @@ import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
-import com.github.retrooper.packetevents.protocol.packettype.PacketTypeCommon;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -59,23 +58,25 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
     private static class CoordsPacketListener implements PacketListener {
         @Override
         public void onPacketSend(PacketSendEvent event) {
-            Player player = event.getUser().as(Player.class);
+            Player player = event.getPlayer();
             if (player == null) return;
 
             UUID uuid = player.getUniqueId();
             if (!CoordsToggle.getInstance().isCoordinateHidden(uuid)) return;
 
-            PacketTypeCommon packetType = event.getPacketType();
+            var packetType = event.getPacketType();
 
             if (packetType == PacketType.Play.Server.PLAYER_POSITION ||
                     packetType == PacketType.Play.Server.PLAYER_POSITION_AND_LOOK ||
-                    packetType == PacketType.Play.Server.PLAYER_ROTATION ||
-                    packetType == PacketType.Play.Server.PLAYER_UPDATE_POSITION) {
+                    packetType == PacketType.Play.Server.PLAYER_ROTATION) {
 
                 try {
-                    event.getPacket().getDoubles().write(0, 0.0);
-                    event.getPacket().getDoubles().write(1, -64.0);
-                    event.getPacket().getDoubles().write(2, 0.0);
+                    var wrapper = new com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPosition(event);
+                    wrapper.setX(0.0);
+                    wrapper.setY(-64.0);
+                    wrapper.setZ(0.0);
+                    wrapper.setFields(true, true, true);
+                    wrapper.writeData();
                 } catch (Exception ignored) {
                 }
             }
