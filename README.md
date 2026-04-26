@@ -2,46 +2,45 @@
 
 A Minecraft Paper plugin to toggle Bedrock Edition coordinates display for streamers - prevents stream sniping by hiding player coordinates on Bedrock clients.
 
+## How It Works
+
+When using GeyserMC through Velocity proxy:
+1. **Velocity Proxy**: Has Geyser-Velocity and Floodgate pre-installed
+2. **Backend Paper Servers**: Run the game server with just Floodgate (Geyser isn't needed here)
+3. **CoordsToggle**: Installed on each backend Paper server
+
+When a Bedrock player uses `/coordinates`, their coordinates display is hidden on their client.
+
 ## Requirements
 
-### Server Side
-- **Paper 1.21.4+** server
+### Backend Paper Server
+- **Paper 1.21.4+**
 - **Java 21**
-- **Geyser-Spigot** - Must be installed on the Paper server
-- **Floodgate** - Required for Bedrock connections
+- **Floodgate** must be installed
 
-### Proxy Side (Velocity)
-- **Velocity 3.x** proxy
-- **Geyser-Velocity** - Installed on Velocity
-- **CoordsToggle-Velocity** - This plugin (install on Velocity)
+### Velocity Proxy
+- **Velocity 3.x**
+- **Geyser-Velocity** (has Floodgate built-in)
+
+> Note: GeyserMC runs on the Velocity proxy, not on the backend servers. The backend servers only need Floodgate for player authentication.
 
 ## Installation
 
-### 1. Paper Server (Geyser + Floodgate)
-1. Install [Geyser-Spigot](https://geysermc.org/download) on your Paper server
-2. Install [Floodgate](https://geysermc.org/download) on your Paper server
-3. Place `CoordsToggle.jar` in the `plugins/` folder
-4. Restart the server
-
-### 2. Velocity Proxy
+### 1. Velocity Proxy
 1. Install [Geyser-Velocity](https://geysermc.org/download) on your Velocity proxy
-2. Download **CoordsToggle-Velocity** from [Releases](https://github.com/XPaladiumyX/CoordsToggle/releases)
-3. Place `CoordsToggle-Velocity.jar` in Velocity's `plugins/` folder
-4. Restart the proxy
+2. That's it! Floodgate is included with Geyser-Velocity
+3. Configure Geyser to point to your backend Paper servers
 
-## How It Works
-
-- When a Bedrock player uses `/coordinates` or `/coords`, their coordinates display is hidden
-- The toggle state is saved per player and persists across:
-  - Player disconnect/reconnect
-  - Server restarts
-  - Full proxy restarts
-- Java Edition players see a message telling them to use F3 (coordinates cannot be hidden on Java)
+### 2. Backend Paper Servers
+1. Install [Floodgate](https://geysermc.org/download) on each Paper server
+2. Configure Floodgate to connect to your Velocity proxy
+3. Place `CoordsToggle.jar` in the `plugins/` folder
+4. Restart each backend server
 
 ## Commands
 
 | Command | Alias | Description | Permission |
-|---------|------|-------------|------------|
+|---------|-------|-------------|------------|
 | `/coordinates` | `/coords` | Toggle your coordinates display | `coords.toggle.use` |
 | `/coordstoggle` | `/ctreload` | Reload plugin configuration | `coords.toggle.reload` |
 
@@ -54,6 +53,15 @@ Prefix: "§dSky X §9Network §eCoordsToggle §8●⏺ "
 
 The prefix is used in messages sent to players.
 
+## Features
+
+- Toggle coordinates display ON/OFF via command
+- State saved per player in `playerdata/` folder
+- Persists across player disconnect/reconnect
+- Persists across server restarts
+- Works for Bedrock Edition clients (via GeyserMC)
+- Java Edition players get a message to use F3
+
 ## Building from Source
 
 ### Prerequisites
@@ -62,7 +70,7 @@ The prefix is used in messages sent to players.
 
 ### Build Commands
 ```bash
-# Using build.bat (Windows)
+# Windows (double-click build.bat)
 build.bat
 
 # Or manually
