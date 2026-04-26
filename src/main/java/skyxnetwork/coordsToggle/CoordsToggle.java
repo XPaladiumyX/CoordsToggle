@@ -89,22 +89,22 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         if (!geyserHooked) return;
 
         try {
+            GeyserConnection connection = GeyserApi.api().connectionByUuid(uuid);
+            if (connection == null) return; // Joueur Java Edition → on ignore
+
             GameRulesChangedPacket packet = new GameRulesChangedPacket();
             packet.getGameRules().add(new GameRuleData<>("showCoordinates", !hidden));
 
-            GeyserConnection connection = GeyserApi.api().connectionByUuid(uuid);
-            if (connection == null) return;
+            // GeyserConnection est implémenté par GeyserSession qui expose sendUpstreamPacket.
+            // On appelle la méthode directement sur l'objet connection — pas besoin de chercher
+            // un champ "session" intermédiaire : connection EST déjà la session.
+            var method = connection.getClass().getMethod("sendUpstreamPacket", BedrockPacket.class);
+            method.invoke(connection, packet);
 
-            var sessionField = connection.getClass().getDeclaredField("session");
-            sessionField.setAccessible(true);
-            Object session = sessionField.get(connection);
-
-            if (session != null) {
-                var method = session.getClass().getMethod("sendUpstreamPacket", BedrockPacket.class);
-                method.invoke(session, packet);
-            }
+        } catch (NoSuchMethodException e) {
+            getLogger().severe("sendUpstreamPacket introuvable sur GeyserSession. Mauvaise version de Geyser ? " + e.getMessage());
         } catch (Exception e) {
-            getLogger().warning("Erreur envoi packet: " + e.getMessage());
+            getLogger().warning("Erreur envoi packet Bedrock: " + e.getMessage());
         }
     }
 
