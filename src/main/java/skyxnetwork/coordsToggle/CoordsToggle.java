@@ -8,6 +8,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -182,6 +183,20 @@ public final class CoordsToggle extends JavaPlugin implements Listener, CommandE
         UUID uuid = event.getPlayer().getUniqueId();
         savePlayerData(uuid);
         playerHidden.remove(uuid);
+    }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        if (!isCoordinateHidden(uuid)) return;
+
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (player.isOnline()) {
+                sendToggleToProxy(player, true);
+            }
+        }, 10L);
     }
 
     @Override
