@@ -5,11 +5,9 @@ A Minecraft Paper plugin to toggle Bedrock Edition coordinates display for strea
 ## How It Works
 
 When using GeyserMC through Velocity proxy:
-1. **Velocity Proxy**: Has Geyser-Velocity and Floodgate pre-installed
-2. **Backend Paper Servers**: Run the game server with just Floodgate (Geyser isn't needed here)
-3. **CoordsToggle**: Installed on each backend Paper server
-
-When a Bedrock player uses `/coordinates`, their coordinates display is hidden on their client.
+1. **Velocity Proxy**: Has Geyser-Velocity and **CoordsToggle-Velocity** installed
+2. **Backend Paper Servers**: Run the game server with Floodgate and **CoordsToggle** installed
+3. When a Bedrock player uses `/coordinates`, CoordsToggle (Paper) sends a plugin message to CoordsToggle-Velocity (Velocity), which sends the GameRulesChangedPacket to hide coordinates
 
 ## Requirements
 
@@ -17,24 +15,25 @@ When a Bedrock player uses `/coordinates`, their coordinates display is hidden o
 - **Paper 1.21.4+**
 - **Java 21**
 - **Floodgate** must be installed
+- **CoordsToggle** plugin (this repo)
 
 ### Velocity Proxy
 - **Velocity 3.x**
 - **Geyser-Velocity** (has Floodgate built-in)
-
-> Note: GeyserMC runs on the Velocity proxy, not on the backend servers. The backend servers only need Floodgate for player authentication.
+- **CoordsToggle-Velocity** plugin (separate repo)
 
 ## Installation
 
 ### 1. Velocity Proxy
 1. Install [Geyser-Velocity](https://geysermc.org/download) on your Velocity proxy
-2. That's it! Floodgate is included with Geyser-Velocity
-3. Configure Geyser to point to your backend Paper servers
+2. Download **CoordsToggle-Velocity** from [Releases](https://github.com/XPaladiumyX/CoordsToggle-Velocity/releases)
+3. Place `CoordsToggle-Velocity.jar` in the Velocity `plugins/` folder
+4. Restart the proxy
 
 ### 2. Backend Paper Servers
 1. Install [Floodgate](https://geysermc.org/download) on each Paper server
 2. Configure Floodgate to connect to your Velocity proxy
-3. Place `CoordsToggle.jar` in the `plugins/` folder
+3. Place `CoordsToggle.jar` in the Paper `plugins/` folder
 4. Restart each backend server
 
 ## Commands
